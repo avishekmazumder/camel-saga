@@ -39,7 +39,7 @@
         </dependency>
         <dependency>
             <groupId>org.apache.camel.springboot</groupId>
-            <artifactId>camel-saga</artifactId>
+            <artifactId>camel-saga-starter</artifactId>
             <version>4.3.0</version>
         </dependency>
     </dependencies>

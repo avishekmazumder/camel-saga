@@ -22,10 +22,16 @@ public class ServiceBApplication {
 
     @PostMapping("/processB")
     public ResponseEntity<String> processB(@RequestBody TagRequest request) {
-        if (request.getTag().contains("failB")) {
+        logger.info("Process for B called");
+        logger.info(request.toString());
+        if (request.getTag().equals("failB")) {
             throw new RuntimeException("Simulated failure in Service B");
         }
-        return new ResponseEntity<>("Processed B: " + request.getTag(), HttpStatusCode.valueOf(201));
+
+        if (request.getTag().equals("failB1")) {
+            return new ResponseEntity<>("Processed B: " + request.getTag(), HttpStatusCode.valueOf(201));
+        }
+        return new ResponseEntity<>("Processed B: " + request.getTag(), HttpStatusCode.valueOf(200));
     }
 
     @PostMapping("/compensateB")

@@ -15,6 +15,9 @@ public class StatusCodeProcessor implements Processor {
     public void process(Exchange exchange) throws Exception {
         Integer status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
         if (status != null) {
+            if (status == 201) {
+                throw new RuntimeException("Simulating failure from StatusCodeProcessor");
+            }
             exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, status);
             logger.info("Received HTTP status code: {}", status);
         } else {

@@ -18,7 +18,7 @@ public class OrchestrationController {
 
     @PostMapping
     public ResponseEntity<Object> orchestrate(@RequestBody OrchestrationRequest request) {
-        Exchange exchange = producerTemplate.request("direct:startSaga", ex -> ex.getIn().setBody(request));
+/*        Exchange exchange = producerTemplate.request("direct:startSaga", ex -> ex.getIn().setBody(request));
 
         Integer statusCode = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class);
         if (statusCode == null) {
@@ -30,6 +30,15 @@ public class OrchestrationController {
             return ResponseEntity.status(statusCode).body(response);
         } else {
             return ResponseEntity.status(statusCode).body(body);  // plain error string
-        }
+        }*/
+
+        Exchange exchange = producerTemplate.request("direct:startSaga", ex -> ex.getIn().setBody(request));
+
+        int status = exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class) != null
+                ? exchange.getMessage().getHeader(Exchange.HTTP_RESPONSE_CODE, Integer.class)
+                : (exchange.isFailed() ? 500 : 200);
+
+        Object body = exchange.getMessage().getBody();
+        return ResponseEntity.status(status).body(body);
     }
 }
