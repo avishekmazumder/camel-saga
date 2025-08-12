@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @SpringBootApplication
@@ -19,18 +21,21 @@ public class ServiceAApplication {
     }
 
     @PostMapping("/processA")
-    public String processA(@RequestBody TagRequest request) {
+    public ResponseEntity<String> processA(@RequestBody TagRequest request) {
         logger.info("Processing A with request: " + request.toString());
-        if (request.getTag().contains("failA")) {
+        if (request.getTag().equals("failA")) {
             throw new RuntimeException("Simulated failure in Service A");
         }
-        return "Processed A: " + request.getTag();
+
+        if (request.getTag().equals("failA1")) {
+            return new ResponseEntity<>("Processed A: " + request.getTag(), HttpStatusCode.valueOf(201));
+        }
+        return new ResponseEntity<>("Processed A: " + request.getTag(), HttpStatusCode.valueOf(200));
     }
 
     @PostMapping("/compensateA")
     public String compensateA(@RequestBody(required = false) TagRequest request) {
-        logger.info("compensate for A called");
-        logger.info(request.toString());
+        logger.info("Compensating A with request: " + request.toString());
         return "Compensated A for: " + request.getTag();
     }
 }
