@@ -22,8 +22,8 @@ public class ServiceBApplication {
 
     @PostMapping("/processB")
     public ResponseEntity<String> processB(@RequestBody TagRequest request) {
-        logger.info("Process for B called");
-        logger.info(request.toString());
+        logger.info("Processing B with request: " + request.toString());
+
         if (request.getTag().equals("failB")) {
             throw new RuntimeException("Simulated failure in Service B");
         }
@@ -36,8 +36,7 @@ public class ServiceBApplication {
 
     @PostMapping("/compensateB")
     public String compensateB(@RequestBody(required = false) TagRequest request) {
-        logger.info("compensate for B called");
-        logger.info(request.toString());
+        logger.info("Compensating B with request: " + request.toString());
         return "Compensated B for: " + request.getTag();
     }
 }

@@ -154,16 +154,16 @@ public class OrchestrationRoute extends RouteBuilder {
 
         /* ===================== Compensations ===================== */
         from("direct:compensateA")
-                .log("Compensating A for: ${body}")
                 .process(this::prepareCompensateARequest)
+                .log("Compensating A for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
                 .toD("http://localhost:8081/compensateA?bridgeEndpoint=true")
                 .process(statusCodeProcessor);
 
         from("direct:compensateB")
-                .log("Compensating B for: ${body}")
                 .process(this::prepareCompensateBRequest)
+                .log("Compensating B for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
                 .toD("http://localhost:8082/compensateB?bridgeEndpoint=true")

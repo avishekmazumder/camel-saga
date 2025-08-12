@@ -35,8 +35,7 @@ public class ServiceAApplication {
 
     @PostMapping("/compensateA")
     public String compensateA(@RequestBody(required = false) TagRequest request) {
-        logger.info("compensate for A called");
-        logger.info(request.toString());
+        logger.info("Compensating A with request: " + request.toString());
         return "Compensated A for: " + request.getTag();
     }
 }

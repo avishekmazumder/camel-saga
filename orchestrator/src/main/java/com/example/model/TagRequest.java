@@ -11,4 +11,11 @@ public class TagRequest {
     public void setTag(String tag) {
         this.tag = tag;
     }
+
+    @Override
+    public String toString() {
+        return "TagRequest{" +
+                "tag='" + tag + '\'' +
+                '}';
+    }
 }
