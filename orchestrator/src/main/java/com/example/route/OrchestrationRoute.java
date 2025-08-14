@@ -22,8 +22,14 @@ public class OrchestrationRoute extends RouteBuilder {
     @Value("${service.a.url}")
     private String serviceAUrl;
 
+    @Value("${service.a.compensate.url}")
+    private String serviceACompensateUrl;
+
     @Value("${service.b.url}")
     private String serviceBUrl;
+
+    @Value("${service.b.compensate.url}")
+    private String serviceBCompensateUrl;
 
     @Autowired
     StatusCodeProcessor statusCodeProcessor;
@@ -158,7 +164,7 @@ public class OrchestrationRoute extends RouteBuilder {
                 .log("Compensating A for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
-                .toD("http://localhost:8081/compensateA?bridgeEndpoint=true")
+                .toD(serviceACompensateUrl + "?bridgeEndpoint=true")
                 .process(statusCodeProcessor);
 
         from("direct:compensateB")
@@ -166,7 +172,7 @@ public class OrchestrationRoute extends RouteBuilder {
                 .log("Compensating B for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
-                .toD("http://localhost:8082/compensateB?bridgeEndpoint=true")
+                .toD(serviceBCompensateUrl + "?bridgeEndpoint=true")
                 .process(statusCodeProcessor);
     }
 
