@@ -1,35 +1,25 @@
 package com.example.route;
 
 import com.example.model.OrchestrationRequest;
-import com.example.model.OrchestrationResponse;
 import com.example.model.TagRequest;
 import com.example.processor.StatusCodeProcessor;
 import org.apache.camel.Exchange;
 import org.apache.camel.LoggingLevel;
 import org.apache.camel.builder.RouteBuilder;
-import org.apache.camel.model.SagaCompletionMode;
 import org.apache.camel.model.SagaPropagation;
 import org.apache.camel.saga.InMemorySagaService;
-import org.apache.camel.http.base.HttpOperationFailedException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
 
-@Component
-public class OrchestrationRoute extends RouteBuilder {
+//@Component
+public class MulticastSagaOrchestrationRoute extends RouteBuilder {
 
     @Value("${service.a.url}")
     private String serviceAUrl;
 
-    @Value("${service.a.compensate.url}")
-    private String serviceACompensateUrl;
-
     @Value("${service.b.url}")
     private String serviceBUrl;
-
-    @Value("${service.b.compensate.url}")
-    private String serviceBCompensateUrl;
 
     @Autowired
     StatusCodeProcessor statusCodeProcessor;
@@ -54,38 +44,23 @@ public class OrchestrationRoute extends RouteBuilder {
                 .setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
                 .setBody(simple("{\"message\":\"Saga failed. Compensation triggered.\",\"error\":\"${exception.message}\"}"));
 
-        /* ===================== Orchestrator (single saga) ===================== */
+        /* ===================== Orchestrator (single saga, now parallel) ===================== */
         from("direct:startSaga")
                 .routeId("saga-orchestration-route")
-                .saga().propagation(SagaPropagation.REQUIRED)    // start/join one saga spanning A→B
-                .log("Starting Saga with OrchestrationRequest")
+                .saga().propagation(SagaPropagation.REQUIRED)
+                .log("Starting Saga (parallel) with OrchestrationRequest")
                 .setProperty("orchestrationRequest", body())
-
-                // ---- Call Service A (no saga here) ----
-                .to("direct:callA")
-
-                // If A had HTTP error, abort gracefully (no compensation for A)
-                .choice()
-                .when(exchangeProperty("abortOrchestration").isEqualTo(true))
-                .log("Aborting after Service A HTTP error")
-                .stop()
-                .otherwise()
-                // A succeeded → register A as completed participant
-                //.to("direct:registerA")
-
-                // ---- Call Service B (no saga here) ----
-                .to("direct:callB")
-
-                // B succeeded → register B as completed participant
-                //.to("direct:registerB")
-
-                // Aggregate both responses
+                // Fan-out to A and B concurrently; fail fast if any branch throws
+                .multicast().parallelProcessing().stopOnException()
+                .to("direct:callA", "direct:callB")
+                .end()
+                // Build final response from properties set by branches
                 .bean("responseAggregator", "aggregate(${exchangeProperty.responseA}, ${exchangeProperty.responseB})")
                 .log("Aggregated response: ${body}")
                 .setHeader(Exchange.HTTP_RESPONSE_CODE, constant(200))
                 .end();
 
-        /* ===================== Service A (work only; no saga here) ===================== */
+        /* ===================== Service A (work only; register on success) ===================== */
         from("direct:callA")
                 .routeId("call-service-a")
                 .log("Calling Service A")
@@ -94,11 +69,11 @@ public class OrchestrationRoute extends RouteBuilder {
                 .setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
                 .doTry()
-                    .toD(serviceAUrl + "?bridgeEndpoint=true")
-                    .log("Service A response: ${body}")
-                    .to("direct:registerA")
-                    .process(statusCodeProcessor)                // throws on non-2xx
-                    .setProperty("responseA", simple("${body}"))
+                .toD(serviceAUrl + "?bridgeEndpoint=true")
+                .log("Service A response: ${body}")
+                .process(statusCodeProcessor)                // Http* exceptions on non-2xx are caught below
+                .setProperty("responseA", simple("${body}"))
+                .to("direct:registerA")                      // register only after success
                 .doCatch(org.springframework.web.client.HttpClientErrorException.class,
                         org.springframework.web.client.HttpServerErrorException.class,
                         org.apache.camel.http.base.HttpOperationFailedException.class)
@@ -108,19 +83,18 @@ public class OrchestrationRoute extends RouteBuilder {
                 .setBody(simple("{\"service\":\"A\",\"message\":\"HTTP failure calling Service A\","
                         + "\"status\":${exception.statusCode},"
                         + "\"error\":\"${exception.message}\"}"))
-                .setProperty("abortOrchestration", constant(true)) // tell the orchestrator to stop
-                .stop()                                            // no saga failure => no compensateA
+                // rethrow to fail the multicast/saga
+                .process(e -> { throw e.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class); })
                 .doCatch(Exception.class)
                 .log("Service A unexpected error: ${exception.class} - ${exception.message}")
                 .setHeader(Exchange.HTTP_RESPONSE_CODE, constant(500))
                 .setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
                 .setBody(simple("{\"service\":\"A\",\"message\":\"Unexpected error calling Service A\","
                         + "\"error\":\"${exception.message}\"}"))
-                // fail the saga; A was not registered yet, so no compensateA
                 .process(e -> { throw e.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class); })
                 .end();
 
-        /* ===================== Service B (work only; no saga here) ===================== */
+        /* ===================== Service B (work only; register on success) ===================== */
         from("direct:callB")
                 .routeId("call-service-b")
                 .log("Calling Service B")
@@ -131,10 +105,9 @@ public class OrchestrationRoute extends RouteBuilder {
                 .doTry()
                 .toD(serviceBUrl + "?bridgeEndpoint=true")
                 .log("Service B response: ${body}")
-                .to("direct:registerB")
                 .process(statusCodeProcessor)
                 .setProperty("responseB", simple("${body}"))
-                // B HTTP errors: rethrow to fail saga -> compensate A (B not registered)
+                .to("direct:registerB")                      // register only after success
                 .doCatch(org.springframework.web.client.HttpClientErrorException.class,
                         org.springframework.web.client.HttpServerErrorException.class,
                         org.apache.camel.http.base.HttpOperationFailedException.class)
@@ -154,7 +127,7 @@ public class OrchestrationRoute extends RouteBuilder {
                 .process(e -> { throw e.getProperty(Exchange.EXCEPTION_CAUGHT, Exception.class); })
                 .end();
 
-        /* ===================== Registration routes (these mark completion) ===================== */
+        /* ===================== Registration routes (mark completion for compensation) ===================== */
         registerParticipant("direct:registerA", "direct:compensateA", "Service A");
         registerParticipant("direct:registerB", "direct:compensateB", "Service B");
 
@@ -164,7 +137,7 @@ public class OrchestrationRoute extends RouteBuilder {
                 .log("Compensating A for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
-                .toD(serviceACompensateUrl + "?bridgeEndpoint=true")
+                .toD("http://localhost:8081/compensateA?bridgeEndpoint=true")
                 .process(statusCodeProcessor);
 
         from("direct:compensateB")
@@ -172,7 +145,7 @@ public class OrchestrationRoute extends RouteBuilder {
                 .log("Compensating B for: ${body.toString}")
                 .marshal().json()
                 .setHeader(Exchange.HTTP_METHOD, constant("POST"))
-                .toD(serviceBCompensateUrl + "?bridgeEndpoint=true")
+                .toD("http://localhost:8082/compensateB?bridgeEndpoint=true")
                 .process(statusCodeProcessor);
     }
 
@@ -214,6 +187,4 @@ public class OrchestrationRoute extends RouteBuilder {
         tag.setTag("compensateB1");
         ex.getIn().setBody(tag);
     }
-
 }
-
