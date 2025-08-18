@@ -47,7 +47,11 @@ public class OrchestrationController {
 
         Object body = exchange.getMessage().getBody();
 
-        publisher.publishPlainMessage("hello-world");
+        if (status == 200) {
+            OrchestrationResponse response = (OrchestrationResponse) body;
+            publisher.publishRawMessage(response);
+        }
+        //publisher.publishPlainMessage("hello-world");
 
         return ResponseEntity.status(status).body(body);
     }

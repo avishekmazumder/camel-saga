@@ -3,13 +3,13 @@ spring:
     client:
       service-url: pulsar://pulsar:6650
     producer:
-      topic-name1: jt-plain-topic
-      topic-name2: jt-raw-topic
-#    consumer:
-#      subscription:
-#        name: my-subscription
-#    defaults:
-#      type-mappings:
-#        - messageType: com.javatechie.dto.Customer
-#          schema-info:
-#            schema-type: JSON
+      topic-name1: adm-plain-topic
+      topic-name2: adm-raw-topic
+    consumer:
+      subscription:
+        name: my-subscription
+    defaults:
+      type-mappings:
+        - messageType: com.example.model.OrchestrationResponse
+          schema-info:
+            schema-type: JSON
