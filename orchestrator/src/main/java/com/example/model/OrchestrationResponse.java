@@ -25,4 +25,12 @@ public class OrchestrationResponse {
     public void setResponseB(String responseB) {
         this.responseB = responseB;
     }
+
+    @Override
+    public String toString() {
+        return "OrchestrationResponse{" +
+                "responseA='" + responseA + '\'' +
+                ", responseB='" + responseB + '\'' +
+                '}';
+    }
 }
